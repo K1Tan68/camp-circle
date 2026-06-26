@@ -1,9 +1,22 @@
 import { useState } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Menu, X, Instagram, Twitter, Youtube, ChevronDown, MapPin, Calendar, Camera, BookOpen, Mail, ArrowRight } from "lucide-react";
 
+// ─── Site Texts hook ──────────────────────────────────────────────────────────
+function useSiteTexts() {
+  const { data } = useQuery({
+    queryKey: ["site-texts"],
+    queryFn: async () => {
+      const res = await fetch("/api/site-texts");
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+  const texts: { key: string; value: string }[] = (data as any)?.texts ?? [];
+  const get = (key: string, fallback = "") => texts.find(t => t.key === key)?.value ?? fallback;
+  return get;
+}
 
 // ─── Navbar ──────────────────────────────────────────────────────────────────
 function Navbar() {
@@ -50,7 +63,10 @@ function Navbar() {
   );
 }
 
-function Hero() {
+function Hero({ get }: { get: (key: string, fallback?: string) => string }) {
+  const title = get("hero_title", "桃山のキャンパー");
+  const subtitle = get("hero_subtitle", "自然と仲間と、非日常の体験を。\n桃山学院大学公認キャンプサークル。");
+
   return (
     <section className="relative overflow-hidden flex items-center justify-center" style={{ minHeight: "100vh" }}>
       <picture style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
@@ -78,39 +94,33 @@ function Hero() {
             fontWeight: 700,
             marginBottom: "1.25rem",
             textShadow: "0 8px 30px rgba(0,0,0,0.30)",
+            whiteSpace: "pre-line",
           }}
         >
-          自然と
-          <br />
-          遊ぶ、学ぶ。
+          {title}
         </h1>
-        <p className="mx-auto" style={{ color: "rgba(255,255,255,0.94)", lineHeight: 1.85, maxWidth: "36rem", fontSize: "1.04rem", textShadow: "0 2px 16px rgba(0,0,0,0.25)" }}>
-          初心者も経験者も、道具がなくても大丈夫。
-          <br />
-          学年・学部を超えて、自然の中で仲間をつくろう。
+        <p className="mx-auto" style={{ color: "rgba(255,255,255,0.94)", lineHeight: 1.85, maxWidth: "36rem", fontSize: "1.04rem", textShadow: "0 2px 16px rgba(0,0,0,0.25)", whiteSpace: "pre-line" }}>
+          {subtitle}
         </p>
       </div>
     </section>
   );
 }
 
-function About() {
+function About({ get }: { get: (key: string, fallback?: string) => string }) {
+  const title = get("about_title", "サークル紹介");
+  const body = get("about_body", "桃山学院大学キャンプサークルは、自然の中での活動を通じて学年・学部の壁を越えたつながりが生まれる、アットホームなサークルです。");
+
   return (
     <section id="about" style={{ backgroundColor: "var(--color-cream)", padding: "5rem 1.5rem" }}>
       <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-12 items-center">
         <div>
           <p className="section-label mb-3">About</p>
           <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(2rem, 4vw, 3rem)", color: "var(--color-forest)", marginBottom: "1.25rem" }}>
-            サークル紹介
+            {title}
           </h2>
-          <p style={{ color: "var(--color-earth)", lineHeight: 1.9, marginBottom: "1rem" }}>
-            桃山学院大学キャンプサークルは、自然の中での活動を通じて学年・学部の壁を越えたつながりが生まれる、アットホームなサークルです。
-          </p>
-          <p style={{ color: "var(--color-earth)", lineHeight: 1.9, marginBottom: "1rem" }}>
-            「キャンプって難しそう…」と思っていませんか？ 大丈夫。テントの設営・火起こし・アウトドア料理まで、すべて先輩がイチから丁寧に教えます。道具も最初は貸し出しOKなので、<strong>完全手ぶらで参加できます。</strong>
-          </p>
-          <p style={{ color: "var(--color-earth)", lineHeight: 1.9 }}>
-            月１回の日帰り活動を軸に、春・夏・秋の泊まりキャンプや BBQ イベントも開催。大学生活に忘れられない思い出をつくりましょう。
+          <p style={{ color: "var(--color-earth)", lineHeight: 1.9, marginBottom: "1rem", whiteSpace: "pre-line" }}>
+            {body}
           </p>
         </div>
         <div style={{ backgroundColor: "white", border: "1px solid rgba(0,0,0,0.06)", padding: "1.5rem", boxShadow: "0 10px 30px rgba(0,0,0,0.05)" }}>
@@ -173,7 +183,7 @@ function Schedule() {
   );
 }
 
-// ─── Gallery（サークル企画の写真）────────────────────────────────────────────
+// ─── Gallery ──────────────────────────────────────────────────────────────────
 function Gallery() {
   const { data } = useQuery({
     queryKey: ["photos"],
@@ -215,7 +225,7 @@ function Gallery() {
   );
 }
 
-// ─── Blog / 活動報告（メンバー記事）──────────────────────────────────────────
+// ─── Blog ─────────────────────────────────────────────────────────────────────
 function Blog() {
   const [openPost, setOpenPost] = useState<any>(null);
   const { data } = useQuery({
@@ -261,7 +271,6 @@ function Blog() {
           </div>
         )}
 
-        {/* 記事モーダル */}
         {openPost && (
           <div onClick={() => setOpenPost(null)}
             style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "2rem 1rem", overflowY: "auto" }}>
@@ -290,7 +299,13 @@ function Blog() {
   );
 }
 
-function Join() {
+function Join({ get }: { get: (key: string, fallback?: string) => string }) {
+  const joinTitle = get("join_title", "一緒にキャンプしませんか？");
+  const joinBody = get("join_body", "初心者大歓迎！道具がなくても大丈夫。\n楽しいキャンプライフを一緒に始めましょう。");
+  const igUrl = get("join_instagram", "");
+  const twUrl = get("join_twitter", "");
+  const lineUrl = get("join_line", "");
+
   const [contactType, setContactType] = useState<"inquiry" | "visit">("inquiry");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -323,21 +338,37 @@ function Join() {
     }
   };
 
+  // SNS links from site-texts (show only if URL is set)
+  const snsLinks = [
+    igUrl && { href: igUrl, icon: <Instagram size={18} />, label: "Instagram" },
+    twUrl && { href: twUrl, icon: <Twitter size={18} />, label: "Twitter/X" },
+    lineUrl && { href: lineUrl, icon: <span style={{ fontWeight: 700, fontSize: "0.85rem" }}>LINE</span>, label: "LINE" },
+  ].filter(Boolean) as { href: string; icon: React.ReactNode; label: string }[];
+
   return (
     <section id="join" style={{ backgroundColor: "var(--color-cream)", padding: "6rem 1.5rem" }}>
       <div className="max-w-5xl mx-auto">
         <div className="grid md:grid-cols-2 gap-16">
           <div>
             <p className="section-label mb-3">Join Us</p>
-            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(2rem, 4vw, 3rem)", color: "var(--color-forest)", marginBottom: "1.5rem" }}>
-              一緒にキャンプ<br />しませんか？
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(2rem, 4vw, 3rem)", color: "var(--color-forest)", marginBottom: "1.5rem", whiteSpace: "pre-line" }}>
+              {joinTitle}
             </h2>
-            <p style={{ color: "var(--color-earth)", lineHeight: 1.9, marginBottom: "0.75rem" }}>
-              キャンプ経験ゼロでも大歓迎。テント・寝袋などの道具は最初は貸し出しOKです。「とりあえず話だけ聞いてみたい」という方も大丈夫！
+            <p style={{ color: "var(--color-earth)", lineHeight: 1.9, marginBottom: "0.75rem", whiteSpace: "pre-line" }}>
+              {joinBody}
             </p>
-            <p style={{ color: "var(--color-earth)", lineHeight: 1.9, marginBottom: "2rem" }}>
-              まずは見学・体験参加から気軽にどうぞ。雰囲気を見てから本入部を決めてもOKです。右のフォームからお気軽にご連絡ください。
-            </p>
+            {snsLinks.length > 0 && (
+              <div className="flex items-center gap-4" style={{ marginBottom: "1.5rem" }}>
+                {snsLinks.map(s => (
+                  <a key={s.href} href={s.href} target="_blank" rel="noopener noreferrer"
+                    style={{ color: "var(--color-forest)", transition: "color 0.2s", display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.85rem", textDecoration: "none" }}
+                    onMouseEnter={e => (e.currentTarget.style.color = "var(--color-orange)")}
+                    onMouseLeave={e => (e.currentTarget.style.color = "var(--color-forest)")}>
+                    {s.icon} {s.label}
+                  </a>
+                ))}
+              </div>
+            )}
             <div className="flex flex-col gap-4">
               {[
                 { icon: <Calendar size={20} />, title: "活動頻度", desc: "月１回（季節によって泊まりキャンプあり）" },
@@ -419,13 +450,16 @@ function Join() {
   );
 }
 
-function Footer() {
+function Footer({ get }: { get: (key: string, fallback?: string) => string }) {
+  const footerMsg = get("footer_message", `© ${new Date().getFullYear()} 桃山学院大学キャンプサークル`);
+  const igUrl = get("join_instagram", "https://www.instagram.com/momo_camp.circle/");
+  const twUrl = get("join_twitter", "https://x.com/andrew_camjp");
+
   const sns = [
-    { href: "https://www.instagram.com/momo_camp.circle/", icon: <Instagram size={20} />, label: "Instagram" },
-    { href: "https://x.com/andrew_camjp", icon: <Twitter size={20} />, label: "Twitter / X" },
+    igUrl && { href: igUrl, icon: <Instagram size={20} />, label: "Instagram" },
+    twUrl && { href: twUrl, icon: <Twitter size={20} />, label: "Twitter / X" },
     { href: "https://www.youtube.com/channel/UC4nbTGtuUK34YadYbrB2fHA", icon: <Youtube size={20} />, label: "YouTube" },
-    { href: "https://momoyama-camp.jp", icon: <ArrowRight size={20} />, label: "Official Site" },
-  ];
+  ].filter(Boolean) as { href: string; icon: React.ReactNode; label: string }[];
 
   return (
     <footer style={{ backgroundColor: "var(--color-forest)", color: "var(--color-cream)", padding: "3rem 1.5rem" }}>
@@ -443,10 +477,10 @@ function Footer() {
             </a>
           ))}
         </div>
-        <p style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.45)", marginTop: "0.5rem", lineHeight: 1.8 }}>
+        <p style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.45)", marginTop: "0.5rem", lineHeight: 1.8, whiteSpace: "pre-line" }}>
           campmomoyama@gmail.com
           <br />
-          © {new Date().getFullYear()} 桃山学院大学キャンプサークル
+          {footerMsg}
         </p>
       </div>
     </footer>
@@ -454,17 +488,17 @@ function Footer() {
 }
 
 export default function HomePage() {
-  useQuery({ queryKey: ["site-texts"], queryFn: async () => api.siteText.get().then(r => r.json()) });
+  const get = useSiteTexts();
   return (
     <div>
       <Navbar />
-      <Hero />
-      <About />
+      <Hero get={get} />
+      <About get={get} />
       <Schedule />
       <Gallery />
       <Blog />
-      <Join />
-      <Footer />
+      <Join get={get} />
+      <Footer get={get} />
     </div>
   );
 }
