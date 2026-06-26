@@ -61,22 +61,24 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", minHeight: "calc(100vh - 56px)" }}>
+      <div style={{ display: "flex", minHeight: "calc(100vh - 56px)", flexDirection: window.innerWidth < 768 ? "column" : "row" }}>
         {/* Sidebar */}
-        <div style={{ width: "200px", backgroundColor: "var(--color-dusk)", flexShrink: 0, padding: "1.5rem 0", position: "relative" }}>
+        <div style={{ width: window.innerWidth < 768 ? "100%" : "200px", backgroundColor: "var(--color-dusk)", flexShrink: 0, padding: window.innerWidth < 768 ? "1rem" : "1.5rem 0", position: "relative", display: "grid", gridAutoFlow: window.innerWidth < 768 ? "column" : "row", gridAutoColumns: window.innerWidth < 768 ? "1fr" : undefined, overflowX: window.innerWidth < 768 ? "auto" : undefined }}>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               style={{ width: "100%", display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.75rem 1.5rem", background: tab === t.id ? "rgba(255,255,255,0.1)" : "none", border: "none", cursor: "pointer", color: tab === t.id ? "var(--color-cream)" : "var(--color-sky)", fontSize: "0.875rem", textAlign: "left", borderLeft: tab === t.id ? "3px solid var(--color-orange)" : "3px solid transparent", transition: "all 0.15s" }}>
               {t.icon} {t.label}
             </button>
           ))}
-          <div style={{ padding: "1.5rem", position: "absolute", bottom: 0 }}>
-            <a href="/" target="_blank" style={{ color: "var(--color-earth)", fontSize: "0.75rem", textDecoration: "none" }}>サイトを見る →</a>
-          </div>
+          {window.innerWidth >= 768 && (
+            <div style={{ padding: "1.5rem", position: "absolute", bottom: 0 }}>
+              <a href="/" target="_blank" style={{ color: "var(--color-earth)", fontSize: "0.75rem", textDecoration: "none" }}>サイトを見る →</a>
+            </div>
+          )}
         </div>
 
         {/* Main */}
-        <div style={{ flex: 1, padding: "2rem", overflow: "auto" }}>
+        <div style={{ flex: 1, padding: window.innerWidth < 768 ? "1rem" : "2rem", overflow: "auto" }}>
           {tab === "texts" && <SiteTextsPanel />}
           {tab === "events" && <EventsPanel />}
           {tab === "photos" && <PhotosPanel />}
