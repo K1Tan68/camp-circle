@@ -1,18 +1,5 @@
 {
   "buildCommand": "cd packages/web && bun install && bun run build",
   "outputDirectory": "packages/web/dist",
-  "framework": "vite",
-  "runtime": "bun@1",
-  "functions": {
-    "packages/web/src/server.ts": {
-      "runtime": "bun@1"
-    }
-  },
-  "env": {
-    "GMAIL_USER": "@GMAIL_USER",
-    "GMAIL_APP_PASSWORD": "@GMAIL_APP_PASSWORD",
-    "GOOGLE_OAUTH_CLIENT_ID": "@GOOGLE_OAUTH_CLIENT_ID",
-    "GOOGLE_OAUTH_CLIENT_SECRET": "@GOOGLE_OAUTH_CLIENT_SECRET",
-    "GOOGLE_OAUTH_REFRESH_TOKEN": "@GOOGLE_OAUTH_REFRESH_TOKEN"
-  }
+  "framework": "vite"
 }
