@@ -1,43 +1,38 @@
-# camp-circle 管理画面拡張タスク
+# Vercel デプロイ作業ログ
 
 ## 目標
-公開サイト + 独立管理画面に分割。UIでコンテンツ編集（ファイル編集不要）。
+- /api/* Serverless Functions を動かす
+- 環境変数を設定する
+- https://camp-circle.vercel.app/ で完全動作
 
-## アーキテクチャ
-- 公開サイト: momoyama-camp.jp（表示のみ）
-- 管理画面: admin.momoyama-camp.jp（認証 + CRUD）※同リポジトリ、Vercel別プロジェクトでデプロイ
-- バックエンド: 同じHono API共有
-- DB: Turso (libsql)
+## 現状
+- Vercel JS hash: B8z9HAKc (古い) → ローカル最新: DLAsMsRg
+- /api/health → 404 (functions 未配備)
+- git push は完了 (latest: eeeee32)
+- Vercelのビルドが最新コミットを反映していない
 
-## 認証
-- メール+パスワード（better-auth）
-- 許可メールリスト方式: ki.ki.souta.kun@gmail.com / sygo0302513@gmail.com
-- 後から管理画面でメール追加可能
+## 問題の仮説
+1. Vercel がGitHubの新しいコミットをトリガーしていない
+2. ビルドは走っているがエラーで失敗している
+3. functions の設定が正しくない
 
-## 機能要件
-1. 活動スケジュール: 月ごと複数件、date+title+description、個別編集
-2. ギャラリー: サークル企画の写真、複数アップロード、eventTitle+month+caption+location
-3. 活動報告: メンバー個人記事、authorName+title+content+複数写真、月分類
+## 確認済み
+- .vercel/project.json がルートにある → Vercelはルートをプロジェクトルートとして認識
+- vercel.json にfunctionsを定義
+- api/[...slug].ts が @hono/node-server の getRequestListener を使用
 
-## 進捗
-- [x] schema.ts 拡張（events.date, photos.eventTitle/month, posts.authorName/month/photos, adminEmails テーブル）
-- [x] events.ts ルート更新（date対応）
-- [x] photos.ts ルート更新（eventTitle/month + PUT追加）
-- [x] posts.ts ルート更新（authorName/month/photos対応）
-- [x] admin.ts ルート更新（allowed-emails CRUD）
-- [x] auth.ts フック（許可メールチェック + editor自動付与）
-- [x] seed.ts（初期管理者メール登録）
-- [x] 管理画面UI: スケジュールPanel（date追加）
-- [x] 管理画面UI: ギャラリーPanel（月ごと + 複数アップロード + 企画名）
-- [x] 管理画面UI: 活動報告Panel（複数写真 + 著者名 + 月）
-- [x] 管理画面UI: メールアドレス管理Panel
-- [x] tsc エラーチェック通過
-- [ ] DBマイグレーション（新カラム追加）← 進行中
-- [ ] 公開サイト: スケジュール/ギャラリー/活動報告 表示更新
-- [ ] ローカル起動テスト
-- [ ] GitHub push + Vercel デプロイ
-- [ ] ドメイン設定（後でユーザー対応）
+## 必要なアクション
+- VERCEL_TOKEN が必要 (env var確認・設定)
+- または Vercel Dashboard でビルドログ確認
+- 必要な環境変数: DATABASE_URL, DATABASE_AUTH_TOKEN, S3_*, BETTER_AUTH_SECRET, RESEND_API_KEY, WEBSITE_URL
 
-## 注意
-- NO RunableAI edits — 全て手動ファイル編集
-- 既存の admin/index.tsx は850行、PhotosPanel/PostsPanel あり → 拡張する
+## ENV VARS 設定値 (from .env)
+DATABASE_URL=libsql://43fe5634-559e-49de-8e05-9961a76ce9ce-runable.aws-us-east-2.turso.io
+DATABASE_AUTH_TOKEN=eyJhbGc...
+S3_ENDPOINT=https://4e93db960a1c13ad600b2eb6eb1147c2.r2.cloudflarestorage.com
+S3_BUCKET=43fe5634-559e-49de-8e05-9961a76ce9ce
+S3_ACCESS_KEY_ID=84c077f478370d3d2d6a19fe743ee212
+S3_SECRET_ACCESS_KEY=8482eee1ac52748d0f34647fb870741af659eaa2dbae279f9410d7274511f836
+BETTER_AUTH_SECRET=WRwW3wx/IRQ5DeKa/BOYkbsPFNLTZoxSdLd4Tndxwvc=
+WEBSITE_URL=https://camp-circle.vercel.app
+RESEND_API_KEY=re_23i34MEW_FxbNmosezEYkpJSHKHkQqeLW
