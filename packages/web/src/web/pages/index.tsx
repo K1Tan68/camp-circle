@@ -122,6 +122,16 @@ function About() {
 }
 
 function Schedule() {
+  const year = new Date().getFullYear();
+  const { data } = useQuery({
+    queryKey: ["events", year],
+    queryFn: async () => (await api.events.$get({ query: { year: String(year) } })).json(),
+  });
+  const events: any[] = (data as any)?.events ?? [];
+  const MONTHS = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+  const byMonth: Record<string, any[]> = {};
+  for (const ev of events) (byMonth[ev.month] ??= []).push(ev);
+
   return (
     <section id="schedule" style={{ backgroundColor: "#fff", padding: "5rem 1.5rem" }}>
       <div className="max-w-5xl mx-auto">
@@ -130,14 +140,30 @@ function Schedule() {
           活動スケジュール
         </h2>
         <div className="flex flex-col gap-3">
-          {[
-            "1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"
-          ].map((m) => (
-            <div key={m} style={{ backgroundColor: "var(--color-cream)", padding: "1rem 1.25rem", border: "1px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-              <p style={{ color: "var(--color-forest)", fontWeight: 700, margin: 0, minWidth: "3.5rem" }}>{m}</p>
-              <div style={{ flex: 1, borderBottom: "1px dotted rgba(0,0,0,0.18)", height: 0 }} />
-            </div>
-          ))}
+          {MONTHS.map((m) => {
+            const items = byMonth[m] ?? [];
+            return (
+              <div key={m} style={{ backgroundColor: "var(--color-cream)", padding: "1rem 1.25rem", border: "1px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "flex-start", gap: "1rem" }}>
+                <p style={{ color: "var(--color-forest)", fontWeight: 700, margin: 0, minWidth: "3.5rem" }}>{m}</p>
+                <div style={{ flex: 1 }}>
+                  {items.length === 0 ? (
+                    <div style={{ borderBottom: "1px dotted rgba(0,0,0,0.18)", height: 0, marginTop: "0.7rem" }} />
+                  ) : (
+                    items.map((ev: any) => (
+                      <div key={ev.id} style={{ marginBottom: "0.5rem" }}>
+                        <p style={{ color: "var(--color-forest)", fontWeight: 700, margin: 0 }}>
+                          {ev.date && <span style={{ color: "var(--color-orange)", marginRight: "0.5rem", fontSize: "0.85rem" }}>{ev.date}</span>}
+                          {ev.title}
+                        </p>
+                        {ev.location && <p style={{ color: "var(--color-earth)", fontSize: "0.8rem", margin: "0.1rem 0 0" }}>📍 {ev.location}</p>}
+                        {ev.description && <p style={{ color: "#666", fontSize: "0.8rem", margin: "0.1rem 0 0" }}>{ev.description}</p>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
         <p style={{ color: "var(--color-earth)", fontSize: "0.85rem", marginTop: "1.5rem", lineHeight: 1.8 }}>
           ※ 詳細な日程は活動が決まり次第 Instagram で告知します。
@@ -147,8 +173,14 @@ function Schedule() {
   );
 }
 
-// ─── Gallery（準備中）────────────────────────────────────────────────────────
+// ─── Gallery（サークル企画の写真）────────────────────────────────────────────
 function Gallery() {
+  const { data } = useQuery({
+    queryKey: ["photos"],
+    queryFn: async () => (await api.photos.$get()).json(),
+  });
+  const photos: any[] = (data as any)?.photos ?? [];
+
   return (
     <section id="gallery" style={{ backgroundColor: "var(--color-sand)", padding: "5rem 1.5rem" }}>
       <div className="max-w-5xl mx-auto">
@@ -156,25 +188,43 @@ function Gallery() {
         <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(2rem, 4vw, 3rem)", color: "var(--color-forest)", marginBottom: "2rem" }}>
           ギャラリー
         </h2>
-        <div style={{
-          border: "2px dashed rgba(0,0,0,0.15)",
-          padding: "4rem 2rem",
-          textAlign: "center",
-          backgroundColor: "rgba(255,255,255,0.5)",
-        }}>
-          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📸</div>
-          <p style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.4rem", color: "var(--color-forest)", marginBottom: "0.5rem" }}>Coming Soon</p>
-          <p style={{ color: "var(--color-earth)", fontSize: "0.9rem", lineHeight: 1.8 }}>
-            活動写真を準備中です。もうしばらくお待ちください。
-          </p>
-        </div>
+        {photos.length === 0 ? (
+          <div style={{ border: "2px dashed rgba(0,0,0,0.15)", padding: "4rem 2rem", textAlign: "center", backgroundColor: "rgba(255,255,255,0.5)" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📸</div>
+            <p style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.4rem", color: "var(--color-forest)", marginBottom: "0.5rem" }}>Coming Soon</p>
+            <p style={{ color: "var(--color-earth)", fontSize: "0.9rem", lineHeight: 1.8 }}>活動写真を準備中です。もうしばらくお待ちください。</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "0.75rem" }}>
+            {photos.map((p: any) => (
+              <div key={p.id} style={{ position: "relative", backgroundColor: "white", boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }}>
+                <img src={p.url} alt={p.eventTitle ?? ""} loading="lazy" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
+                <div style={{ padding: "0.6rem 0.75rem" }}>
+                  {p.eventTitle && <p style={{ fontSize: "0.82rem", color: "var(--color-forest)", margin: "0 0 0.2rem", fontWeight: 700 }}>{p.eventTitle}</p>}
+                  <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.7rem", color: "var(--color-earth)", flexWrap: "wrap" }}>
+                    {p.month && <span>{p.month}</span>}
+                    {p.location && <span>📍 {p.location}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
-// ─── Blog（準備中）───────────────────────────────────────────────────────────
+// ─── Blog / 活動報告（メンバー記事）──────────────────────────────────────────
 function Blog() {
+  const [openPost, setOpenPost] = useState<any>(null);
+  const { data } = useQuery({
+    queryKey: ["posts"],
+    queryFn: async () => (await api.posts.$get({ query: {} })).json(),
+  });
+  const posts: any[] = (data as any)?.posts ?? [];
+  const parsePhotos = (ph: any) => { try { return ph ? JSON.parse(ph) : []; } catch { return []; } };
+
   return (
     <section id="blog" style={{ backgroundColor: "#fff", padding: "5rem 1.5rem" }}>
       <div className="max-w-5xl mx-auto">
@@ -182,18 +232,59 @@ function Blog() {
         <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(2rem, 4vw, 3rem)", color: "var(--color-forest)", marginBottom: "2rem" }}>
           活動報告
         </h2>
-        <div style={{
-          border: "2px dashed rgba(0,0,0,0.12)",
-          padding: "4rem 2rem",
-          textAlign: "center",
-          backgroundColor: "var(--color-cream)",
-        }}>
-          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📝</div>
-          <p style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.4rem", color: "var(--color-forest)", marginBottom: "0.5rem" }}>Coming Soon</p>
-          <p style={{ color: "var(--color-earth)", fontSize: "0.9rem", lineHeight: 1.8 }}>
-            活動レポートを順次掲載予定です。お楽しみに。
-          </p>
-        </div>
+        {posts.length === 0 ? (
+          <div style={{ border: "2px dashed rgba(0,0,0,0.12)", padding: "4rem 2rem", textAlign: "center", backgroundColor: "var(--color-cream)" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📝</div>
+            <p style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.4rem", color: "var(--color-forest)", marginBottom: "0.5rem" }}>Coming Soon</p>
+            <p style={{ color: "var(--color-earth)", fontSize: "0.9rem", lineHeight: 1.8 }}>活動レポートを順次掲載予定です。お楽しみに。</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
+            {posts.map((p: any) => {
+              const photos = parsePhotos(p.photos);
+              return (
+                <div key={p.id} onClick={() => setOpenPost({ ...p, _photos: photos })}
+                  style={{ backgroundColor: "var(--color-cream)", border: "1px solid rgba(0,0,0,0.06)", cursor: "pointer", overflow: "hidden", transition: "transform 0.15s" }}>
+                  {photos[0] && <img src={photos[0].url} loading="lazy" style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }} />}
+                  <div style={{ padding: "1rem 1.1rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+                      {p.month && <span style={{ color: "var(--color-orange)", fontSize: "0.72rem", fontWeight: 700 }}>{p.month}</span>}
+                      <span style={{ backgroundColor: "var(--color-forest)", color: "var(--color-sand)", fontSize: "0.65rem", padding: "0.1rem 0.45rem" }}>{p.tag}</span>
+                    </div>
+                    <p style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.1rem", color: "var(--color-forest)", margin: "0 0 0.3rem", fontWeight: 700 }}>{p.title}</p>
+                    {p.authorName && <p style={{ fontSize: "0.72rem", color: "var(--color-earth)", margin: "0 0 0.3rem" }}>✍ {p.authorName}</p>}
+                    <p style={{ color: "#666", fontSize: "0.82rem", margin: 0, lineHeight: 1.6 }}>{p.excerpt || p.content?.slice(0, 70) + "…"}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 記事モーダル */}
+        {openPost && (
+          <div onClick={() => setOpenPost(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "2rem 1rem", overflowY: "auto" }}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ backgroundColor: "white", maxWidth: "680px", width: "100%", padding: "2rem", position: "relative", borderRadius: "4px", marginTop: "2rem" }}>
+              <button onClick={() => setOpenPost(null)} style={{ position: "absolute", top: "1rem", right: "1rem", background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", color: "var(--color-earth)", lineHeight: 1 }}>×</button>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                {openPost.month && <span style={{ color: "var(--color-orange)", fontSize: "0.78rem", fontWeight: 700 }}>{openPost.month}</span>}
+                <span style={{ backgroundColor: "var(--color-forest)", color: "var(--color-sand)", fontSize: "0.7rem", padding: "0.1rem 0.5rem" }}>{openPost.tag}</span>
+              </div>
+              <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.6rem", color: "var(--color-forest)", margin: "0 0 0.4rem" }}>{openPost.title}</h3>
+              {openPost.authorName && <p style={{ fontSize: "0.8rem", color: "var(--color-earth)", margin: "0 0 1.25rem" }}>✍ {openPost.authorName}</p>}
+              <p style={{ color: "#444", fontSize: "0.92rem", lineHeight: 1.9, whiteSpace: "pre-wrap", margin: "0 0 1.5rem" }}>{openPost.content}</p>
+              {openPost._photos?.length > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "0.6rem" }}>
+                  {openPost._photos.map((ph: any, i: number) => (
+                    <img key={i} src={ph.url} loading="lazy" style={{ width: "100%", borderRadius: "3px", display: "block" }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

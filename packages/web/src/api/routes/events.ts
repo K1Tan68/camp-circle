@@ -7,7 +7,7 @@ import { requireEditor } from "../middleware/auth";
 export const eventsRoutes = new Hono()
   .get("/", async (c) => {
     const year = c.req.query("year") ? parseInt(c.req.query("year")!) : new Date().getFullYear();
-    const rows = await db.select().from(events).where(eq(events.year, year)).orderBy(asc(events.monthNum));
+    const rows = await db.select().from(events).where(eq(events.year, year)).orderBy(asc(events.monthNum), asc(events.date));
     return c.json({ events: rows }, 200);
   })
   .post("/", requireEditor, async (c) => {
@@ -15,8 +15,9 @@ export const eventsRoutes = new Hono()
     const [row] = await db.insert(events).values({
       month: body.month,
       monthNum: body.monthNum ?? parseInt(body.month) ?? 1,
+      date: body.date ?? "",
       title: body.title,
-      location: body.location,
+      location: body.location ?? "",
       description: body.description ?? "",
       year: body.year ?? new Date().getFullYear(),
     }).returning();
@@ -28,8 +29,9 @@ export const eventsRoutes = new Hono()
     const [row] = await db.update(events).set({
       month: body.month,
       monthNum: body.monthNum ?? parseInt(body.month) ?? 1,
+      date: body.date ?? "",
       title: body.title,
-      location: body.location,
+      location: body.location ?? "",
       description: body.description ?? "",
       year: body.year,
     }).where(eq(events.id, id)).returning();

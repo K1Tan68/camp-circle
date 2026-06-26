@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../database";
 import { posts } from "../database/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, asc } from "drizzle-orm";
 import { requireEditor } from "../middleware/auth";
 
 export const postsRoutes = new Hono()
@@ -9,9 +9,9 @@ export const postsRoutes = new Hono()
     const all = c.req.query("all") === "true";
     let rows;
     if (all) {
-      rows = await db.select().from(posts).orderBy(desc(posts.createdAt));
+      rows = await db.select().from(posts).orderBy(desc(posts.monthNum), desc(posts.createdAt));
     } else {
-      rows = await db.select().from(posts).where(eq(posts.published, true)).orderBy(desc(posts.createdAt));
+      rows = await db.select().from(posts).where(eq(posts.published, true)).orderBy(desc(posts.monthNum), desc(posts.createdAt));
     }
     return c.json({ posts: rows }, 200);
   })
@@ -30,6 +30,11 @@ export const postsRoutes = new Hono()
       excerpt: body.excerpt ?? body.content.slice(0, 100) + "…",
       tag: body.tag ?? "活動報告",
       authorId: user.id,
+      authorName: body.authorName ?? user.name ?? "",
+      month: body.month ?? "",
+      monthNum: body.monthNum ?? 0,
+      year: body.year ?? new Date().getFullYear(),
+      photos: body.photos ? JSON.stringify(body.photos) : null,
       published: body.published ?? false,
     }).returning();
     return c.json({ post: row }, 201);
@@ -42,6 +47,11 @@ export const postsRoutes = new Hono()
       content: body.content,
       excerpt: body.excerpt ?? body.content.slice(0, 100) + "…",
       tag: body.tag,
+      authorName: body.authorName,
+      month: body.month,
+      monthNum: body.monthNum,
+      year: body.year,
+      photos: body.photos ? JSON.stringify(body.photos) : null,
       published: body.published,
       updatedAt: new Date(),
     }).where(eq(posts.id, id)).returning();

@@ -3,10 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { authClient, clearToken } from "../../lib/auth";
 import { useLocation } from "wouter";
-import { LogOut, Calendar, Camera, BookOpen, Users, Link, Trash2, Plus, Edit2, Check, X, Upload, Type } from "lucide-react";
+import { LogOut, Calendar, Camera, BookOpen, Users, Link, Trash2, Plus, Edit2, Check, X, Upload, Type, Mail } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-type Tab = "texts" | "events" | "photos" | "posts" | "members" | "invites";
+type Tab = "texts" | "events" | "photos" | "posts" | "members" | "invites" | "emails";
 
 // ── Admin Shell ───────────────────────────────────────────────────────────────
 export default function AdminPage() {
@@ -32,13 +32,13 @@ export default function AdminPage() {
 
   const isAdmin = userRole === "admin";
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "texts", label: "テキスト編集", icon: <Type size={16} /> },
     { id: "events", label: "スケジュール", icon: <Calendar size={16} /> },
     { id: "photos", label: "ギャラリー", icon: <Camera size={16} /> },
-    { id: "posts", label: "ブログ", icon: <BookOpen size={16} /> },
+    { id: "posts", label: "活動報告", icon: <BookOpen size={16} /> },
+    { id: "texts", label: "テキスト編集", icon: <Type size={16} /> },
     ...(isAdmin ? [
+      { id: "emails" as Tab, label: "メール管理", icon: <Mail size={16} /> },
       { id: "members" as Tab, label: "メンバー", icon: <Users size={16} /> },
-      { id: "invites" as Tab, label: "招待管理", icon: <Link size={16} /> },
     ] : []),
   ];
 
@@ -83,6 +83,7 @@ export default function AdminPage() {
           {tab === "events" && <EventsPanel />}
           {tab === "photos" && <PhotosPanel />}
           {tab === "posts" && <PostsPanel />}
+          {tab === "emails" && isAdmin && <EmailsPanel />}
           {tab === "members" && isAdmin && <MembersPanel />}
           {tab === "invites" && isAdmin && <InvitesPanel />}
         </div>
@@ -94,6 +95,7 @@ export default function AdminPage() {
 // ── Shared helpers ────────────────────────────────────────────────────────────
 const cardStyle: React.CSSProperties = { backgroundColor: "white", padding: "1.5rem", marginBottom: "1px" };
 const inputStyle: React.CSSProperties = { width: "100%", padding: "0.6rem 0.8rem", border: "1.5px solid #ddd", fontFamily: "'Lato',sans-serif", fontSize: "0.875rem", outline: "none", boxSizing: "border-box" };
+const labelStyle: React.CSSProperties = { fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" };
 const btnStyle = (color = "var(--color-forest)"): React.CSSProperties => ({ background: color, color: "white", border: "none", padding: "0.5rem 1rem", cursor: "pointer", fontSize: "0.8rem", fontFamily: "'Lato',sans-serif", fontWeight: 700, letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: "0.4rem" });
 
 function SectionHeader({ title, onAdd }: { title: string; onAdd: () => void }) {
@@ -226,7 +228,7 @@ function EventsPanel() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [editing, setEditing] = useState<any>(null);
   const [adding, setAdding] = useState(false);
-  const blank = { month: "4月", monthNum: 4, title: "", location: "", description: "", year };
+  const blank = { month: "4月", monthNum: 4, date: "", title: "", location: "", description: "", year };
 
   const { data, isLoading } = useQuery({
     queryKey: ["events", year],
@@ -264,6 +266,10 @@ function EventsPanel() {
           <div>
             <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>年</label>
             <input type="number" value={form.year} onChange={e => setForm((f: any) => ({ ...f, year: parseInt(e.target.value) }))} style={inputStyle} />
+          </div>
+          <div style={{ gridColumn: "1/-1" }}>
+            <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>日付（任意）</label>
+            <input type="date" value={form.date ?? ""} onChange={e => setForm((f: any) => ({ ...f, date: e.target.value }))} style={inputStyle} />
           </div>
           <div style={{ gridColumn: "1/-1" }}>
             <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>タイトル <span style={{ color: "#e44" }}>*</span></label>
@@ -309,6 +315,7 @@ function EventsPanel() {
               <span style={{ fontFamily: "'Playfair Display',serif", color: "var(--color-orange)", fontSize: "1.1rem", fontWeight: 700, minWidth: "2.5rem" }}>{ev.month}</span>
               <div style={{ flex: 1 }}>
                 <p style={{ fontWeight: 700, color: "var(--color-forest)", margin: "0 0 0.2rem" }}>{ev.title}</p>
+                {ev.date && <p style={{ color: "var(--color-orange)", fontSize: "0.8rem", margin: "0 0 0.2rem", fontWeight: 600 }}>🗓 {ev.date}</p>}
                 {ev.location && <p style={{ color: "var(--color-earth)", fontSize: "0.8rem", margin: "0 0 0.2rem" }}>📍 {ev.location}</p>}
                 {ev.description && <p style={{ color: "#666", fontSize: "0.8rem", margin: 0 }}>{ev.description}</p>}
               </div>
@@ -329,14 +336,16 @@ function EventsPanel() {
   );
 }
 
-// ── Photos ────────────────────────────────────────────────────────────────────
+// ── Photos / ギャラリー（複数アップロード + 企画名 + 月分類）──────────────────────
 function PhotosPanel() {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
-  const [form, setForm] = useState({ caption: "", takenAt: "", location: "", description: "" });
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [meta, setMeta] = useState({ eventTitle: "", month: "8月", monthNum: 8, year: new Date().getFullYear(), location: "", takenAt: "" });
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filterMonth, setFilterMonth] = useState<string>("all");
 
   const { data, isLoading } = useQuery({
     queryKey: ["photos"],
@@ -349,156 +358,156 @@ function PhotosPanel() {
   });
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onload = ev => setPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    const list = Array.from(e.target.files ?? []);
+    if (!list.length) return;
+    setFiles(list);
+    const readers = list.map(file => new Promise<string>(res => {
+      const r = new FileReader();
+      r.onload = ev => res(ev.target?.result as string);
+      r.readAsDataURL(file);
+    }));
+    Promise.all(readers).then(setPreviews);
+  };
+
+  const resetUpload = () => {
+    setFiles([]); setPreviews([]);
+    if (fileRef.current) fileRef.current.value = "";
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (!files.length) return;
     setUploading(true);
+    setProgress({ done: 0, total: files.length });
     try {
-      const presignRes = await api.photos.presign.$post({ json: { filename: selectedFile.name, contentType: selectedFile.type } });
-      const { url, key } = await presignRes.json() as any;
-      await fetch(url, { method: "PUT", body: selectedFile, headers: { "Content-Type": selectedFile.type } });
-      await api.photos.$post({ json: { s3Key: key, ...form } });
+      let order = 0;
+      for (const file of files) {
+        const presignRes = await api.photos.presign.$post({ json: { filename: file.name, contentType: file.type } });
+        const { url, key } = await presignRes.json() as any;
+        await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+        await api.photos.$post({ json: { s3Key: key, eventTitle: meta.eventTitle, month: meta.month, monthNum: meta.monthNum, year: meta.year, location: meta.location, takenAt: meta.takenAt, caption: meta.eventTitle, order: order++ } });
+        setProgress(p => ({ ...p, done: p.done + 1 }));
+      }
       qc.invalidateQueries({ queryKey: ["photos"] });
-      setForm({ caption: "", takenAt: "", location: "", description: "" });
-      setPreview(null);
-      setSelectedFile(null);
-      if (fileRef.current) fileRef.current.value = "";
+      resetUpload();
     } finally {
       setUploading(false);
     }
   };
 
+  const photos = (data as any)?.photos ?? [];
+  const filtered = filterMonth === "all" ? photos : photos.filter((p: any) => p.month === filterMonth);
+  // 月ごとにグループ化
+  const grouped: Record<string, any[]> = {};
+  for (const p of filtered) {
+    const k = p.month || "その他";
+    (grouped[k] ??= []).push(p);
+  }
+  const groupKeys = Object.keys(grouped).sort((a, b) => {
+    const ai = MONTHS.indexOf(a), bi = MONTHS.indexOf(b);
+    return bi - ai;
+  });
+
   return (
     <div>
-      <h2 style={{ fontFamily: "'Playfair Display',serif", color: "var(--color-forest)", fontSize: "1.4rem", marginBottom: "1.25rem" }}>ギャラリー写真</h2>
+      <h2 style={{ fontFamily: "'Playfair Display',serif", color: "var(--color-forest)", fontSize: "1.4rem", marginBottom: "1.25rem" }}>ギャラリー（サークル企画の写真）</h2>
 
-      {/* Upload area */}
+      {/* アップロードエリア */}
       <div style={{ ...cardStyle, border: "2px dashed var(--color-sand)", marginBottom: "1.5rem" }}>
-        <h3 style={{ color: "var(--color-forest)", fontSize: "0.95rem", marginBottom: "1rem" }}>📸 写真をアップロード</h3>
+        <h3 style={{ color: "var(--color-forest)", fontSize: "0.95rem", marginBottom: "1rem" }}>📸 写真をまとめてアップロード（複数選択OK）</h3>
 
-        {/* File drop zone */}
-        <div
-          onClick={() => fileRef.current?.click()}
-          style={{
-            border: "2px dashed #ccc",
-            borderRadius: "4px",
-            padding: "1.5rem",
-            textAlign: "center",
-            cursor: "pointer",
-            marginBottom: "1rem",
-            backgroundColor: preview ? "#f9f9f9" : "white",
-            position: "relative",
-            minHeight: "120px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {preview ? (
-            <img src={preview} alt="preview" style={{ maxHeight: "160px", maxWidth: "100%", objectFit: "contain" }} />
+        {/* 企画情報 */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem", marginBottom: "1rem" }}>
+          <div style={{ gridColumn: "1/-1" }}>
+            <label style={labelStyle}>企画名 <span style={{ color: "#e44" }}>*</span></label>
+            <input value={meta.eventTitle} onChange={e => setMeta(m => ({ ...m, eventTitle: e.target.value }))} placeholder="夏合宿 in 道志の森" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>月</label>
+            <select value={meta.month} onChange={e => { const idx = MONTHS.indexOf(e.target.value); setMeta(m => ({ ...m, month: e.target.value, monthNum: idx + 1 })); }} style={inputStyle}>
+              {MONTHS.map(m => <option key={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>年</label>
+            <input type="number" value={meta.year} onChange={e => setMeta(m => ({ ...m, year: parseInt(e.target.value) }))} style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>日付（任意）</label>
+            <input type="date" value={meta.takenAt} onChange={e => setMeta(m => ({ ...m, takenAt: e.target.value }))} style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>場所（任意）</label>
+            <input value={meta.location} onChange={e => setMeta(m => ({ ...m, location: e.target.value }))} placeholder="山梨県" style={inputStyle} />
+          </div>
+        </div>
+
+        {/* ファイル選択 */}
+        <div onClick={() => fileRef.current?.click()}
+          style={{ border: "2px dashed #ccc", borderRadius: "4px", padding: "1.5rem", textAlign: "center", cursor: "pointer", marginBottom: "1rem", minHeight: "100px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {previews.length > 0 ? (
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
+              {previews.slice(0, 12).map((src, i) => <img key={i} src={src} style={{ height: "70px", width: "70px", objectFit: "cover", borderRadius: "3px" }} />)}
+              {previews.length > 12 && <div style={{ height: "70px", width: "70px", display: "flex", alignItems: "center", justifyContent: "center", background: "#eee", borderRadius: "3px", fontSize: "0.8rem", color: "#666" }}>+{previews.length - 12}</div>}
+            </div>
           ) : (
             <div>
               <Upload size={24} style={{ margin: "0 auto 0.5rem", color: "var(--color-earth)", display: "block" }} />
-              <p style={{ color: "var(--color-earth)", margin: 0, fontSize: "0.875rem" }}>クリックして写真を選択</p>
+              <p style={{ color: "var(--color-earth)", margin: 0, fontSize: "0.875rem" }}>クリックして写真を選択（複数可）</p>
               <p style={{ color: "#aaa", margin: "0.25rem 0 0", fontSize: "0.75rem" }}>JPG, PNG, WEBP</p>
             </div>
           )}
         </div>
-        <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFileSelect} />
+        <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleFileSelect} />
 
-        {/* Metadata fields */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
-          <div>
-            <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>日付</label>
-            <input
-              type="date"
-              value={form.takenAt}
-              onChange={e => setForm(f => ({ ...f, takenAt: e.target.value }))}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>場所</label>
-            <input
-              value={form.location}
-              onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-              placeholder="道志の森、北海道…"
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>タイトル・キャプション</label>
-            <input
-              value={form.caption}
-              onChange={e => setForm(f => ({ ...f, caption: e.target.value }))}
-              placeholder="夕暮れのテントサイト"
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>説明（任意）</label>
-            <input
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              placeholder="夏合宿での一コマ…"
-              style={inputStyle}
-            />
-          </div>
-        </div>
+        {files.length > 0 && <p style={{ fontSize: "0.8rem", color: "var(--color-earth)", marginBottom: "0.75rem" }}>{files.length} 枚選択中</p>}
 
-        <button
-          style={btnStyle(selectedFile ? "var(--color-orange)" : "#aaa")}
-          onClick={handleUpload}
-          disabled={!selectedFile || uploading}
-        >
-          <Upload size={14} /> {uploading ? "アップロード中..." : "アップロード"}
+        <button style={btnStyle(files.length && meta.eventTitle ? "var(--color-orange)" : "#aaa")} onClick={handleUpload} disabled={!files.length || !meta.eventTitle || uploading}>
+          <Upload size={14} /> {uploading ? `アップロード中... (${progress.done}/${progress.total})` : `${files.length || ""}枚アップロード`}
         </button>
-        {selectedFile && !uploading && (
-          <button style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", marginLeft: "0.75rem", fontSize: "0.8rem" }}
-            onClick={() => { setSelectedFile(null); setPreview(null); if (fileRef.current) fileRef.current.value = ""; }}>
-            キャンセル
-          </button>
+        {files.length > 0 && !uploading && (
+          <button style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", marginLeft: "0.75rem", fontSize: "0.8rem" }} onClick={resetUpload}>クリア</button>
         )}
       </div>
 
-      {/* Gallery grid */}
+      {/* 月フィルタ */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "0.8rem", color: "var(--color-earth)" }}>全 {photos.length} 枚</span>
+        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+          <option value="all">すべての月</option>
+          {MONTHS.map(m => <option key={m}>{m}</option>)}
+        </select>
+      </div>
+
+      {/* 月ごとグループ表示 */}
       {isLoading ? <p>読み込み中...</p> : (
         <>
-          <p style={{ color: "var(--color-earth)", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
-            全 {(data as any)?.photos?.length ?? 0} 枚
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "0.75rem" }}>
-            {(data as any)?.photos?.map((p: any) => (
-              <div key={p.id} style={{ position: "relative", backgroundColor: "white", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-                <img src={p.url} alt={p.caption} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
-                <div style={{ padding: "0.6rem 0.75rem" }}>
-                  {p.caption && <p style={{ fontSize: "0.8rem", color: "var(--color-forest)", margin: "0 0 0.2rem", fontWeight: 700 }}>{p.caption}</p>}
-                  <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.7rem", color: "var(--color-earth)", flexWrap: "wrap" }}>
-                    {p.takenAt && <span>📅 {p.takenAt}</span>}
-                    {p.location && <span>📍 {p.location}</span>}
+          {groupKeys.map(mk => (
+            <div key={mk} style={{ marginBottom: "1.5rem" }}>
+              <h3 style={{ fontFamily: "'Playfair Display',serif", color: "var(--color-orange)", fontSize: "1.1rem", margin: "0 0 0.75rem", borderBottom: "1px solid var(--color-sand)", paddingBottom: "0.3rem" }}>{mk}</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "0.6rem" }}>
+                {grouped[mk].map((p: any) => (
+                  <div key={p.id} style={{ position: "relative", backgroundColor: "white", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+                    <img src={p.url} alt={p.caption} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
+                    <div style={{ padding: "0.5rem 0.6rem" }}>
+                      {p.eventTitle && <p style={{ fontSize: "0.78rem", color: "var(--color-forest)", margin: "0 0 0.2rem", fontWeight: 700 }}>{p.eventTitle}</p>}
+                      <div style={{ display: "flex", gap: "0.4rem", fontSize: "0.68rem", color: "var(--color-earth)", flexWrap: "wrap" }}>
+                        {p.takenAt && <span>📅 {p.takenAt}</span>}
+                        {p.location && <span>📍 {p.location}</span>}
+                      </div>
+                    </div>
+                    <button onClick={() => { if (confirm("この写真を削除しますか？")) del.mutate(p.id); }}
+                      style={{ position: "absolute", top: "0.4rem", right: "0.4rem", background: "rgba(220,38,38,0.85)", border: "none", color: "white", padding: "0.3rem", cursor: "pointer", borderRadius: "2px" }}>
+                      <Trash2 size={12} />
+                    </button>
                   </div>
-                  {p.description && <p style={{ fontSize: "0.7rem", color: "#888", margin: "0.2rem 0 0" }}>{p.description}</p>}
-                </div>
-                <button
-                  onClick={() => { if (confirm("この写真を削除しますか？")) del.mutate(p.id); }}
-                  style={{ position: "absolute", top: "0.4rem", right: "0.4rem", background: "rgba(220,38,38,0.85)", border: "none", color: "white", padding: "0.3rem", cursor: "pointer", borderRadius: "2px" }}
-                >
-                  <Trash2 size={12} />
-                </button>
+                ))}
               </div>
-            ))}
-          </div>
-          {((data as any)?.photos?.length ?? 0) === 0 && (
+            </div>
+          ))}
+          {photos.length === 0 && (
             <div style={{ ...cardStyle, textAlign: "center", color: "var(--color-earth)", padding: "3rem" }}>
               <Camera size={32} style={{ margin: "0 auto 0.75rem", opacity: 0.3 }} />
-              <p>写真がまだありません。上のフォームからアップロードしましょう。</p>
+              <p>写真がまだありません。上のフォームから企画名を入れてアップロードしましょう。</p>
             </div>
           )}
         </>
@@ -507,14 +516,17 @@ function PhotosPanel() {
   );
 }
 
-// ── Posts ─────────────────────────────────────────────────────────────────────
+// ── Posts / 活動報告（メンバー個人記事 + 複数写真 + 月分類）───────────────────────
 const TAGS = ["活動報告", "ノウハウ", "お知らせ", "イベント"];
 
 function PostsPanel() {
   const qc = useQueryClient();
+  const { data: session } = authClient.useSession();
   const [editing, setEditing] = useState<any>(null);
   const [adding, setAdding] = useState(false);
-  const blank = { title: "", content: "", excerpt: "", tag: "活動報告", published: false };
+  const [filterMonth, setFilterMonth] = useState<string>("all");
+  const nowMonth = new Date().getMonth();
+  const blank = { title: "", content: "", excerpt: "", tag: "活動報告", authorName: session?.user?.name ?? "", month: MONTHS[nowMonth], monthNum: nowMonth + 1, year: new Date().getFullYear(), photos: [], published: true };
 
   const { data, isLoading } = useQuery({
     queryKey: ["posts-admin"],
@@ -535,37 +547,95 @@ function PostsPanel() {
   });
 
   const PostForm = ({ initial, onCancel }: { initial: any; onCancel: () => void }) => {
-    const [form, setForm] = useState({ ...initial });
+    const parsePhotos = (ph: any) => {
+      if (Array.isArray(ph)) return ph;
+      if (typeof ph === "string" && ph) { try { return JSON.parse(ph); } catch { return []; } }
+      return [];
+    };
+    const [form, setForm] = useState({ ...initial, photos: parsePhotos(initial.photos) });
+    const [uploading, setUploading] = useState(false);
+    const fileRef = useRef<HTMLInputElement>(null);
+
+    const handlePhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const list = Array.from(e.target.files ?? []);
+      if (!list.length) return;
+      setUploading(true);
+      try {
+        const uploaded: any[] = [];
+        for (const file of list) {
+          const presignRes = await api.photos.presign.$post({ json: { filename: file.name, contentType: file.type } });
+          const { url, key, publicUrl } = await presignRes.json() as any;
+          await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+          uploaded.push({ url: publicUrl, s3Key: key });
+        }
+        setForm((f: any) => ({ ...f, photos: [...f.photos, ...uploaded] }));
+      } finally {
+        setUploading(false);
+        if (fileRef.current) fileRef.current.value = "";
+      }
+    };
+
+    const removePhoto = (idx: number) => setForm((f: any) => ({ ...f, photos: f.photos.filter((_: any, i: number) => i !== idx) }));
+
     return (
       <div style={{ ...cardStyle, border: "2px solid var(--color-orange)", marginBottom: "1rem" }}>
         <div style={{ display: "grid", gap: "0.75rem" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "0.75rem" }}>
+          <div>
+            <label style={labelStyle}>タイトル <span style={{ color: "#e44" }}>*</span></label>
+            <input value={form.title} onChange={e => setForm((f: any) => ({ ...f, title: e.target.value }))} placeholder="北アルプス縦走レポート" style={inputStyle} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "0.75rem" }}>
             <div>
-              <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>タイトル <span style={{ color: "#e44" }}>*</span></label>
-              <input value={form.title} onChange={e => setForm((f: any) => ({ ...f, title: e.target.value }))} style={inputStyle} />
+              <label style={labelStyle}>著者名 <span style={{ color: "#e44" }}>*</span></label>
+              <input value={form.authorName} onChange={e => setForm((f: any) => ({ ...f, authorName: e.target.value }))} placeholder="山田太郎" style={inputStyle} />
             </div>
             <div>
-              <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>タグ</label>
-              <select value={form.tag} onChange={e => setForm((f: any) => ({ ...f, tag: e.target.value }))} style={{ ...inputStyle, width: "auto" }}>
+              <label style={labelStyle}>月</label>
+              <select value={form.month} onChange={e => { const idx = MONTHS.indexOf(e.target.value); setForm((f: any) => ({ ...f, month: e.target.value, monthNum: idx + 1 })); }} style={inputStyle}>
+                {MONTHS.map(m => <option key={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>年</label>
+              <input type="number" value={form.year} onChange={e => setForm((f: any) => ({ ...f, year: parseInt(e.target.value) }))} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>タグ</label>
+              <select value={form.tag} onChange={e => setForm((f: any) => ({ ...f, tag: e.target.value }))} style={inputStyle}>
                 {TAGS.map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
           </div>
           <div>
-            <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>本文 <span style={{ color: "#e44" }}>*</span></label>
-            <textarea rows={8} value={form.content} onChange={e => setForm((f: any) => ({ ...f, content: e.target.value }))} style={{ ...inputStyle, resize: "vertical" }} />
+            <label style={labelStyle}>本文 <span style={{ color: "#e44" }}>*</span></label>
+            <textarea rows={8} value={form.content} onChange={e => setForm((f: any) => ({ ...f, content: e.target.value }))} placeholder="活動の内容を書いてください…" style={{ ...inputStyle, resize: "vertical" }} />
           </div>
+
+          {/* 写真（複数）*/}
           <div>
-            <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>抜粋（省略で自動生成）</label>
-            <input value={form.excerpt} onChange={e => setForm((f: any) => ({ ...f, excerpt: e.target.value }))} style={inputStyle} />
+            <label style={labelStyle}>写真（複数選択可）</label>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+              {form.photos.map((ph: any, i: number) => (
+                <div key={i} style={{ position: "relative" }}>
+                  <img src={ph.url} style={{ height: "80px", width: "80px", objectFit: "cover", borderRadius: "3px" }} />
+                  <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: "-6px", right: "-6px", background: "#dc2626", border: "none", color: "white", borderRadius: "50%", width: "20px", height: "20px", cursor: "pointer", fontSize: "0.7rem", lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+              <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                style={{ height: "80px", width: "80px", border: "2px dashed #ccc", borderRadius: "3px", background: "white", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--color-earth)", fontSize: "0.65rem", gap: "0.2rem" }}>
+                {uploading ? "..." : <><Upload size={16} /> 追加</>}
+              </button>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handlePhotos} />
           </div>
+
           <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.875rem", color: "var(--color-forest)" }}>
             <input type="checkbox" checked={form.published} onChange={e => setForm((f: any) => ({ ...f, published: e.target.checked }))} />
             公開する（チェックなしは下書き保存）
           </label>
         </div>
         <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-          <button style={btnStyle("var(--color-forest)")} onClick={() => save.mutate(form)} disabled={save.isPending || !form.title}>
+          <button style={btnStyle("var(--color-forest)")} onClick={() => save.mutate(form)} disabled={save.isPending || !form.title || !form.authorName || uploading}>
             <Check size={13} /> {save.isPending ? "保存中..." : "保存"}
           </button>
           <button style={btnStyle("#888")} onClick={onCancel}><X size={13} /> キャンセル</button>
@@ -574,21 +644,39 @@ function PostsPanel() {
     );
   };
 
+  const posts = (data as any)?.posts ?? [];
+  const filtered = filterMonth === "all" ? posts : posts.filter((p: any) => p.month === filterMonth);
+
   return (
     <div>
-      <SectionHeader title="ブログ・活動報告" onAdd={() => setAdding(true)} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
+        <h2 style={{ fontFamily: "'Playfair Display',serif", color: "var(--color-forest)", fontSize: "1.4rem", margin: 0 }}>活動報告</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+            <option value="all">すべての月</option>
+            {MONTHS.map(m => <option key={m}>{m}</option>)}
+          </select>
+          <button style={btnStyle("var(--color-orange)")} onClick={() => setAdding(true)}><Plus size={14} /> 追加</button>
+        </div>
+      </div>
+
       {adding && <PostForm initial={blank} onCancel={() => setAdding(false)} />}
-      {isLoading ? <p>読み込み中...</p> : (data as any)?.posts?.map((p: any) => (
-        editing?.id === p.id
+      {isLoading ? <p>読み込み中...</p> : filtered.map((p: any) => {
+        const photos = (() => { try { return p.photos ? JSON.parse(p.photos) : []; } catch { return []; } })();
+        return editing?.id === p.id
           ? <PostForm key={p.id} initial={editing} onCancel={() => setEditing(null)} />
           : (
             <div key={p.id} style={{ ...cardStyle, display: "flex", alignItems: "flex-start", gap: "1rem", marginBottom: "1px" }}>
+              {photos[0] && <img src={photos[0].url} style={{ width: "80px", height: "80px", objectFit: "cover", borderRadius: "3px", flexShrink: 0 }} />}
               <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem", flexWrap: "wrap" }}>
+                  {p.month && <span style={{ color: "var(--color-orange)", fontSize: "0.75rem", fontWeight: 700 }}>{p.month}</span>}
                   <span style={{ backgroundColor: "var(--color-forest)", color: "var(--color-sand)", fontSize: "0.7rem", padding: "0.1rem 0.5rem" }}>{p.tag}</span>
                   <span style={{ fontSize: "0.75rem", color: p.published ? "#16a34a" : "#999" }}>{p.published ? "● 公開中" : "○ 下書き"}</span>
+                  {photos.length > 0 && <span style={{ fontSize: "0.7rem", color: "var(--color-earth)" }}>📷 {photos.length}</span>}
                 </div>
                 <p style={{ fontWeight: 700, color: "var(--color-forest)", margin: "0 0 0.2rem" }}>{p.title}</p>
+                {p.authorName && <p style={{ fontSize: "0.75rem", color: "var(--color-earth)", margin: "0 0 0.2rem" }}>✍ {p.authorName}</p>}
                 <p style={{ color: "#666", fontSize: "0.8rem", margin: 0 }}>{p.excerpt || p.content?.slice(0, 80) + "…"}</p>
               </div>
               <div style={{ display: "flex", gap: "0.4rem" }}>
@@ -596,20 +684,17 @@ function PostsPanel() {
                 <button onClick={() => { if (confirm(`「${p.title}」を削除しますか？`)) del.mutate(p.id); }} style={{ background: "none", border: "1px solid #fca5a5", padding: "0.3rem 0.6rem", cursor: "pointer", color: "#dc2626" }}><Trash2 size={13} /></button>
               </div>
             </div>
-          )
-      ))}
-      {!isLoading && ((data as any)?.posts?.length ?? 0) === 0 && (
+          );
+      })}
+      {!isLoading && filtered.length === 0 && (
         <div style={{ ...cardStyle, textAlign: "center", color: "var(--color-earth)", padding: "3rem" }}>
           <BookOpen size={32} style={{ margin: "0 auto 0.75rem", opacity: 0.3 }} />
-          <p>まだ投稿がありません。「追加」から書き始めましょう。</p>
+          <p>活動報告がまだありません。「追加」から書き始めましょう。</p>
         </div>
       )}
     </div>
   );
 }
-
-// ── Members (admin only) ──────────────────────────────────────────────────────
-const ROLES = ["部長", "副部長", "SNS担当", "会計", "一般"];
 
 function MembersPanel() {
   const qc = useQueryClient();
@@ -845,6 +930,125 @@ function InvitesPanel() {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Emails / 管理者メールアドレス管理（admin only）──────────────────────────────
+function EmailsPanel() {
+  const qc = useQueryClient();
+  const [email, setEmail] = useState("");
+  const [label, setLabel] = useState("");
+  const [newRole, setNewRole] = useState("editor");
+  const [error, setError] = useState("");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["allowed-emails"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/allowed-emails", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("bearer_token") ?? ""}` },
+      });
+      return res.json();
+    },
+  });
+
+  const add = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/allowed-emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("bearer_token") ?? ""}` },
+        body: JSON.stringify({ email, label, role: newRole }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message ?? "エラー"); }
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["allowed-emails"] }); setEmail(""); setLabel(""); setNewRole("editor"); setError(""); },
+    onError: (e: any) => setError(e.message),
+  });
+
+  const toggle = useMutation({
+    mutationFn: async ({ id, active }: { id: number; active: boolean }) => {
+      await fetch(`/api/admin/allowed-emails/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("bearer_token") ?? ""}` },
+        body: JSON.stringify({ active }),
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["allowed-emails"] }),
+  });
+
+  const del = useMutation({
+    mutationFn: async (id: number) => {
+      await fetch(`/api/admin/allowed-emails/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${localStorage.getItem("bearer_token") ?? ""}` },
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["allowed-emails"] }),
+  });
+
+  const emails = (data as any)?.emails ?? [];
+
+  return (
+    <div>
+      <h2 style={{ fontFamily: "'Playfair Display',serif", color: "var(--color-forest)", fontSize: "1.4rem", marginBottom: "0.5rem" }}>ログイン許可メールアドレス</h2>
+      <p style={{ color: "var(--color-earth)", fontSize: "0.85rem", marginBottom: "1.25rem" }}>
+        ここに登録されたメールアドレスだけが管理画面にログイン（新規登録）できます。SNS担当者などを後から追加できます。
+      </p>
+
+      {/* 追加フォーム */}
+      <div style={{ ...cardStyle, border: "2px dashed var(--color-sand)", marginBottom: "1.5rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: "0.75rem", alignItems: "end" }}>
+          <div>
+            <label style={labelStyle}>メールアドレス <span style={{ color: "#e44" }}>*</span></label>
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="example@gmail.com" style={inputStyle} type="email" />
+          </div>
+          <div>
+            <label style={labelStyle}>役割・名前（任意）</label>
+            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="SNS担当" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>権限</label>
+            <select value={newRole} onChange={e => setNewRole(e.target.value)} style={inputStyle}>
+              <option value="editor">編集者</option>
+              <option value="admin">管理者（メール管理可）</option>
+            </select>
+          </div>
+          <button style={btnStyle("var(--color-orange)")} onClick={() => add.mutate()} disabled={!email || add.isPending}>
+            <Plus size={14} /> {add.isPending ? "追加中..." : "追加"}
+          </button>
+        </div>
+        {error && <p style={{ color: "#dc2626", fontSize: "0.8rem", margin: "0.5rem 0 0" }}>{error}</p>}
+      </div>
+
+      {/* 一覧 */}
+      {isLoading ? <p>読み込み中...</p> : emails.map((em: any) => (
+        <div key={em.id} style={{ ...cardStyle, display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1px" }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontWeight: 700, color: "var(--color-forest)", margin: "0 0 0.2rem" }}>
+              {em.email}
+              <span style={{ fontSize: "0.68rem", marginLeft: "0.5rem", backgroundColor: em.role === "admin" ? "var(--color-orange)" : "var(--color-forest)", color: "white", padding: "0.1rem 0.45rem", borderRadius: "3px", verticalAlign: "middle" }}>
+                {em.role === "admin" ? "管理者" : "編集者"}
+              </span>
+            </p>
+            {em.label && <p style={{ fontSize: "0.78rem", color: "var(--color-earth)", margin: 0 }}>{em.label}</p>}
+          </div>
+          <span style={{ fontSize: "0.75rem", color: em.active ? "#16a34a" : "#999" }}>{em.active ? "● 有効" : "○ 無効"}</span>
+          <button onClick={() => toggle.mutate({ id: em.id, active: !em.active })}
+            style={{ background: "none", border: "1px solid #ddd", padding: "0.3rem 0.7rem", cursor: "pointer", color: "var(--color-forest)", fontSize: "0.75rem" }}>
+            {em.active ? "無効化" : "有効化"}
+          </button>
+          <button onClick={() => { if (confirm(`「${em.email}」を削除しますか？`)) del.mutate(em.id); }}
+            style={{ background: "none", border: "1px solid #fca5a5", padding: "0.3rem 0.6rem", cursor: "pointer", color: "#dc2626" }}>
+            <Trash2 size={13} />
+          </button>
+        </div>
+      ))}
+      {!isLoading && emails.length === 0 && (
+        <div style={{ ...cardStyle, textAlign: "center", color: "var(--color-earth)", padding: "3rem" }}>
+          <p>許可メールがまだありません。上から追加しましょう。</p>
+        </div>
+      )}
     </div>
   );
 }

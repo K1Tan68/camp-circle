@@ -1,7 +1,8 @@
 import { drizzle } from "drizzle-orm/libsql";
 import { createClient } from "@libsql/client";
 import * as schema from "./packages/web/src/api/database/schema";
-import { members, events, posts } from "./packages/web/src/api/database/schema";
+import { members, events, posts, adminEmails } from "./packages/web/src/api/database/schema";
+import { eq } from "drizzle-orm";
 
 const client = createClient({
   url: process.env.DATABASE_URL!,
@@ -51,6 +52,19 @@ async function main() {
     }))
   );
   console.log("Events inserted");
+
+  // --- 許可管理者メール（既存なら追加しない） ---
+  const initialAdmins = [
+    { email: "ki.ki.souta.kun@gmail.com", label: "部長" },
+    { email: "sygo0302513@gmail.com", label: "SNS担当" },
+  ];
+  for (const a of initialAdmins) {
+    const existing = await db.select().from(adminEmails).where(eq(adminEmails.email, a.email));
+    if (existing.length === 0) {
+      await db.insert(adminEmails).values({ email: a.email, label: a.label, active: true });
+    }
+  }
+  console.log("Admin emails inserted");
 
   // Posts: 空のまま（削除済み）
   console.log("Done!");

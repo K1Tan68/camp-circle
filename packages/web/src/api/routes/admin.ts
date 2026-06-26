@@ -1,11 +1,51 @@
 import { Hono } from "hono";
 import { db } from "../database";
-import { invitations, userRoles } from "../database/schema";
+import { invitations, userRoles, adminEmails } from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAdmin, requireEditor } from "../middleware/auth";
 import { randomBytes } from "crypto";
 
 export const adminRoutes = new Hono()
+  // === 許可メールアドレス管理 ===
+  // メールが許可リストにあるか確認（サインアップ前チェック、公開）
+  .get("/allowed-emails/check", async (c) => {
+    const email = (c.req.query("email") ?? "").toLowerCase().trim();
+    if (!email) return c.json({ allowed: false }, 200);
+    const [row] = await db.select().from(adminEmails).where(eq(adminEmails.email, email));
+    return c.json({ allowed: !!row && row.active, label: row?.label ?? null }, 200);
+  })
+  // 許可メール一覧（admin only）
+  .get("/allowed-emails", requireAdmin, async (c) => {
+    const rows = await db.select().from(adminEmails);
+    return c.json({ emails: rows }, 200);
+  })
+  // 許可メール追加（admin only）
+  .post("/allowed-emails", requireAdmin, async (c) => {
+    const { email, label, role } = await c.req.json();
+    const clean = (email ?? "").toLowerCase().trim();
+    if (!clean) return c.json({ message: "メールアドレスが必要です" }, 400);
+    const existing = await db.select().from(adminEmails).where(eq(adminEmails.email, clean));
+    if (existing.length > 0) return c.json({ message: "既に登録済みです" }, 409);
+    const cleanRole = role === "admin" ? "admin" : "editor";
+    const [row] = await db.insert(adminEmails).values({ email: clean, label: label ?? "", role: cleanRole, active: true }).returning();
+    return c.json({ email: row }, 201);
+  })
+  // 許可メール 有効/無効切り替え（admin only）
+  .put("/allowed-emails/:id", requireAdmin, async (c) => {
+    const id = parseInt(c.req.param("id"));
+    const { active, label } = await c.req.json();
+    const [row] = await db.update(adminEmails).set({
+      ...(active !== undefined ? { active } : {}),
+      ...(label !== undefined ? { label } : {}),
+    }).where(eq(adminEmails.id, id)).returning();
+    return c.json({ email: row }, 200);
+  })
+  // 許可メール削除（admin only）
+  .delete("/allowed-emails/:id", requireAdmin, async (c) => {
+    const id = parseInt(c.req.param("id"));
+    await db.delete(adminEmails).where(eq(adminEmails.id, id));
+    return c.json({ ok: true }, 200);
+  })
   // Get current user's role
   .get("/me/role", requireEditor, async (c) => {
     const user = c.get("user")!;
