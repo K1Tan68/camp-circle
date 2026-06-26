@@ -223,11 +223,14 @@ function SiteTextsPanel() {
 // ── Events ────────────────────────────────────────────────────────────────────
 const MONTHS = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
 
+// ─ EventsPanel with inline edit mode (contenteditable) ─
 function EventsPanel() {
   const qc = useQueryClient();
   const [year, setYear] = useState(new Date().getFullYear());
+  const [editMode, setEditMode] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState<Record<number, any>>({});
   const blank = { month: "4月", monthNum: 4, date: "", title: "", location: "", description: "", year };
 
   const { data, isLoading } = useQuery({
@@ -243,13 +246,19 @@ function EventsPanel() {
         await api.events.$post({ json: ev });
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["events"] }); setEditing(null); setAdding(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["events"] }); setEditing(null); setAdding(false); setDraft({}); setEditMode(false); },
   });
 
   const del = useMutation({
     mutationFn: async (id: number) => api.events[":id"].$delete({ param: { id: String(id) } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["events"] }),
   });
+
+  const saveLightMode = async () => {
+    for (const [idStr, updatedEv] of Object.entries(draft)) {
+      await save.mutateAsync(updatedEv);
+    }
+  };
 
   const EventForm = ({ initial, onCancel }: { initial: any; onCancel: () => void }) => {
     const [form, setForm] = useState({ ...initial });
@@ -269,7 +278,7 @@ function EventsPanel() {
           </div>
           <div style={{ gridColumn: "1/-1" }}>
             <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>日付（任意）</label>
-            <input type="date" value={form.date ?? ""} onChange={e => setForm((f: any) => ({ ...f, date: e.target.value }))} style={inputStyle} />
+            <input type="text" value={form.date ?? ""} onChange={e => setForm((f: any) => ({ ...f, date: e.target.value }))} placeholder="20〜21" style={inputStyle} />
           </div>
           <div style={{ gridColumn: "1/-1" }}>
             <label style={{ fontSize: "0.75rem", color: "var(--color-earth)", display: "block", marginBottom: "0.25rem" }}>タイトル <span style={{ color: "#e44" }}>*</span></label>
@@ -294,21 +303,77 @@ function EventsPanel() {
     );
   };
 
+  const events = (data as any)?.events ?? [];
+
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
         <h2 style={{ fontFamily: "'Playfair Display',serif", color: "var(--color-forest)", fontSize: "1.4rem", margin: 0 }}>年間スケジュール</h2>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <select value={year} onChange={e => setYear(parseInt(e.target.value))} style={{ ...inputStyle, width: "auto" }}>
             {[2024, 2025, 2026, 2027].map(y => <option key={y}>{y}</option>)}
           </select>
-          <button style={btnStyle("var(--color-orange)")} onClick={() => setAdding(true)}><Plus size={14} /> 追加</button>
+          
+          {editMode && (
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button style={btnStyle("var(--color-forest)")} onClick={saveLightMode} disabled={save.isPending || Object.keys(draft).length === 0}>
+                <Check size={14} /> 保存 ({Object.keys(draft).length})
+              </button>
+              <button style={btnStyle("#dc2626")} onClick={() => { setEditMode(false); setDraft({}); }}>
+                <X size={14} /> 終了
+              </button>
+            </div>
+          )}
+          
+          {!editMode && (
+            <>
+              <button style={btnStyle("var(--color-moss)")} onClick={() => setEditMode(true)}>
+                ✏️ クイック編集
+              </button>
+              <button style={btnStyle("var(--color-orange)")} onClick={() => setAdding(true)}>
+                <Plus size={14} /> 追加
+              </button>
+            </>
+          )}
         </div>
       </div>
 
+      {editMode && (
+        <div style={{ backgroundColor: "#fffaed", border: "1px solid var(--color-sand)", padding: "0.75rem 1rem", marginBottom: "1rem", borderRadius: "4px" }}>
+          <p style={{ fontSize: "0.85rem", color: "var(--color-forest)", margin: "0 0 0.5rem", fontWeight: 700 }}>💡 各行をクリック → テキスト編集 → 「保存」で確定</p>
+        </div>
+      )}
+
       {adding && <EventForm initial={{ ...blank, year }} onCancel={() => setAdding(false)} />}
-      {isLoading ? <p>読み込み中...</p> : (data as any)?.events?.map((ev: any) => (
-        editing?.id === ev.id
+      {isLoading ? <p>読み込み中...</p> : events.map((ev: any) => {
+        if (editMode) {
+          const d = draft[ev.id] ?? ev;
+          return (
+            <div key={ev.id} style={{ ...cardStyle, display: "grid", gridTemplateColumns: "80px 1.5fr 120px 150px 40px", gap: "0.75rem", alignItems: "center" }}>
+              <div contentEditable suppressContentEditableWarning onBlur={e => setDraft(dr => ({ ...dr, [ev.id]: { ...d, month: e.currentTarget.textContent || d.month } }))} 
+                style={{ padding: "0.5rem", border: "1px solid #ddd", cursor: "text", fontWeight: 700, color: "var(--color-orange)", borderRadius: "2px", minHeight: "1em" }}>
+                {d.month}
+              </div>
+              <div contentEditable suppressContentEditableWarning onBlur={e => setDraft(dr => ({ ...dr, [ev.id]: { ...d, title: e.currentTarget.textContent || d.title } }))}
+                style={{ padding: "0.5rem", border: "1px solid #ddd", cursor: "text", fontWeight: 700, color: "var(--color-forest)", borderRadius: "2px", minHeight: "1em" }}>
+                {d.title}
+              </div>
+              <div contentEditable suppressContentEditableWarning onBlur={e => setDraft(dr => ({ ...dr, [ev.id]: { ...d, date: e.currentTarget.textContent || d.date } }))}
+                style={{ padding: "0.5rem", border: "1px solid #ddd", cursor: "text", fontSize: "0.85rem", color: "var(--color-orange)", borderRadius: "2px", minHeight: "1em" }}>
+                {d.date || "―"}
+              </div>
+              <div contentEditable suppressContentEditableWarning onBlur={e => setDraft(dr => ({ ...dr, [ev.id]: { ...d, location: e.currentTarget.textContent || d.location } }))}
+                style={{ padding: "0.5rem", border: "1px solid #ddd", cursor: "text", fontSize: "0.85rem", color: "var(--color-earth)", borderRadius: "2px", minHeight: "1em" }}>
+                {d.location || "―"}
+              </div>
+              <button onClick={() => { if (confirm(`「${d.title}」を削除しますか？`)) del.mutate(ev.id); }} style={{ background: "none", border: "1px solid #fca5a5", padding: "0.3rem 0.6rem", cursor: "pointer", color: "#dc2626", borderRadius: "2px" }}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+          );
+        }
+        
+        return editing?.id === ev.id
           ? <EventForm key={ev.id} initial={editing} onCancel={() => setEditing(null)} />
           : (
             <div key={ev.id} style={{ ...cardStyle, display: "flex", alignItems: "flex-start", gap: "1rem" }}>
@@ -319,14 +384,16 @@ function EventsPanel() {
                 {ev.location && <p style={{ color: "var(--color-earth)", fontSize: "0.8rem", margin: "0 0 0.2rem" }}>📍 {ev.location}</p>}
                 {ev.description && <p style={{ color: "#666", fontSize: "0.8rem", margin: 0 }}>{ev.description}</p>}
               </div>
-              <div style={{ display: "flex", gap: "0.4rem" }}>
-                <button onClick={() => setEditing(ev)} style={{ background: "none", border: "1px solid #ddd", padding: "0.3rem 0.6rem", cursor: "pointer", color: "var(--color-forest)" }}><Edit2 size={13} /></button>
-                <button onClick={() => { if (confirm(`「${ev.title}」を削除しますか？`)) del.mutate(ev.id); }} style={{ background: "none", border: "1px solid #fca5a5", padding: "0.3rem 0.6rem", cursor: "pointer", color: "#dc2626" }}><Trash2 size={13} /></button>
-              </div>
+              {!editMode && (
+                <div style={{ display: "flex", gap: "0.4rem" }}>
+                  <button onClick={() => setEditing(ev)} style={{ background: "none", border: "1px solid #ddd", padding: "0.3rem 0.6rem", cursor: "pointer", color: "var(--color-forest)" }}><Edit2 size={13} /></button>
+                  <button onClick={() => { if (confirm(`「${ev.title}」を削除しますか？`)) del.mutate(ev.id); }} style={{ background: "none", border: "1px solid #fca5a5", padding: "0.3rem 0.6rem", cursor: "pointer", color: "#dc2626" }}><Trash2 size={13} /></button>
+                </div>
+              )}
             </div>
-          )
-      ))}
-      {!isLoading && ((data as any)?.events?.length ?? 0) === 0 && (
+          );
+      })}
+      {!isLoading && events.length === 0 && !editMode && (
         <div style={{ ...cardStyle, textAlign: "center", color: "var(--color-earth)", padding: "3rem" }}>
           <Calendar size={32} style={{ margin: "0 auto 0.75rem", opacity: 0.3 }} />
           <p>この年のイベントはまだありません。「追加」から登録しましょう。</p>
@@ -335,8 +402,6 @@ function EventsPanel() {
     </div>
   );
 }
-
-// ── Photos / ギャラリー（複数アップロード + 企画名 + 月分類）──────────────────────
 function PhotosPanel() {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
