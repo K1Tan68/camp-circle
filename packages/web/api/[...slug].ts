@@ -1,4 +1,10 @@
-// Re-export the main app from src/api/index.ts
-import app from "../src/api";
+import { getRequestListener } from "@hono/node-server";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import app from "../src/api/index";
 
-export default app.fetch;
+// Vercel Serverless Function — wrap Hono app with Node.js request listener
+const handler = getRequestListener(app.fetch);
+
+export default function (req: IncomingMessage, res: ServerResponse) {
+  return handler(req, res);
+}

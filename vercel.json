@@ -1,5 +1,25 @@
 {
   "buildCommand": "cd packages/web && bun install && bun run build",
   "outputDirectory": "packages/web/dist",
-  "framework": "vite"
+  "framework": null,
+  "functions": {
+    "packages/web/api/[...slug].ts": {
+      "runtime": "@vercel/node@5.8.21",
+      "memory": 512
+    },
+    "packages/web/api/contact.ts": {
+      "runtime": "@vercel/node@5.8.21",
+      "memory": 256
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/packages/web/api/[...slug].ts"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/packages/web/dist/index.html"
+    }
+  ]
 }
