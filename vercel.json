@@ -14,11 +14,7 @@
   },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/packages/web/api/[...slug].ts"
-    },
-    {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/packages/web/dist/index.html"
     }
   ]
